@@ -2,7 +2,6 @@ package ru.vas.resourceservice.integration.file;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cglib.core.EmitUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.integration.annotation.Gateway;
@@ -13,6 +12,9 @@ import org.springframework.integration.dsl.*;
 import org.springframework.integration.file.FileHeaders;
 import org.springframework.integration.file.dsl.Files;
 import org.springframework.integration.handler.LoggingHandler;
+import org.springframework.integration.kafka.dsl.Kafka;
+import org.springframework.kafka.core.ProducerFactory;
+import org.springframework.kafka.support.converter.KafkaMessageHeaders;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.stereotype.Component;
@@ -42,6 +44,8 @@ import static org.springframework.integration.IntegrationMessageHeaderAccessor.S
 @EnableIntegration
 @Slf4j
 public class FileProcessingIntegrationFlow {
+    @Value("${resource-service.flow.file-processing.headers.start-processing-time}")
+    private String startTimeHeader;
 
     private Executor executor() {
         return Executors.newFixedThreadPool(10);
@@ -83,22 +87,23 @@ public class FileProcessingIntegrationFlow {
     }
 
     @Bean
-    public IntegrationFlow fileProcessingFlow(@Value("${resource-service.registry.file-location}") String blockedDir) {
+    public IntegrationFlow fileProcessingFlow(ProducerFactory<String, BlockedResource> producerFactory, @Value("${spring.kafka.template.default-topic}") String topic) {
         return IntegrationFlows
                 .from(inputSplitFileChannel())
                 .enrichHeaders(h -> h
-                        .header("startProcessingTime", LocalDateTime.now())
+                        .header(startTimeHeader, LocalDateTime.now())
                         .headerFunction(SEQUENCE_SIZE, countOfLines())
                         .headerFunction(CORRELATION_ID, m -> m.getHeaders().getId()))
                 .split(Files.splitter(true).charset(Charset.defaultCharset()))
                 .channel(MessageChannels.executor(this.executor()))
                 .<String>filter(p -> p.split(BlockedResource.Delimiters.VERT_LINE.getValue()).length < 5)
-                .<String, BlockedResource>transform(p -> new BlockedResource(Thread.currentThread().toString(), p))
-                .handle((p, h) -> {
-                    log.info("ETTETETE " + p.toString() + " | " + h.get(CORRELATION_ID));
-                    return p;
-                })
-                .transform(Message.class, m -> m.getHeaders().getId().toString())
+                .transform(BlockedResource::new)
+                .handle(Kafka.outboundChannelAdapter(producerFactory)
+                        .topic(topic)
+                        .sendSuccessChannel(KafkaMessageHeaders.REPLY_CHANNEL)
+                        .sendFailureChannel(KafkaMessageHeaders.ERROR_CHANNEL)
+                        .<BlockedResource>messageKey(m -> m.getPayload().getId()))
+                .channel(KafkaMessageHeaders.REPLY_CHANNEL)
                 .aggregate(aggregatorSpecConfig())
                 .channel(renamingChannel())
                 .get();
@@ -132,10 +137,6 @@ public class FileProcessingIntegrationFlow {
     public IntegrationFlow renamingFlow(@Value("${resource-service.registry.processed-location}") String processedDir) {
         return IntegrationFlows.from(renamingChannel())
                 .handle(message -> {
-                    final LocalDateTime startProcessingTime = message.getHeaders().get("startProcessingTime", LocalDateTime.class);
-                    final Duration duration = Optional.ofNullable(startProcessingTime)
-                            .map(startTime -> Duration.between(startTime, LocalDateTime.now()))
-                            .orElse(null);
                     File file = message.getHeaders().get(FileHeaders.ORIGINAL_FILE, File.class);
                     String fileMessageGuid = message.getHeaders()
                             .getOrDefault(CORRELATION_ID, message.getHeaders().getId())
@@ -145,11 +146,12 @@ public class FileProcessingIntegrationFlow {
                     destinationDir.mkdirs();
                     File destination = new File(destinationDir, tmpFileName);
                     boolean isSuccess = file.renameTo(destination);
+                    final Duration duration = processingTime(message);
                     log.info(String.format("Файл %s в '%s'. FileMessage GUID: %s%s",
                             isSuccess ? "перемещен" : "не(!) перемещен",
                             processedDir,
                             fileMessageGuid,
-                            Objects.nonNull(duration) ? ". Время обработки: " + duration : ""));
+                            Objects.nonNull(duration) ? ". Время обработки: " + duration.toMillis() + " мс" : ""));
                 })
                 .get();
     }
@@ -161,6 +163,13 @@ public class FileProcessingIntegrationFlow {
                 .concat("(")
                 .concat(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")))
                 .concat(").tmp");
+    }
+
+    private Duration processingTime(Message<?> message) {
+        final LocalDateTime startProcessingTime = message.getHeaders().get(startTimeHeader, LocalDateTime.class);
+        return Optional.ofNullable(startProcessingTime)
+                .map(startTime -> Duration.between(startTime, LocalDateTime.now()))
+                .orElse(null);
     }
 
     @Bean

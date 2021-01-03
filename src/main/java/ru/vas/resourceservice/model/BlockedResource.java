@@ -6,6 +6,7 @@ import lombok.ToString;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Getter
@@ -18,8 +19,8 @@ public class BlockedResource {
     private String number;
     private LocalDate dateOfBlock;
 
-    public BlockedResource(String id, String line) {
-        this.id = id;
+    public BlockedResource(String line) {
+        this.id = UUID.randomUUID().toString();
         setUp(line);
     }
 
