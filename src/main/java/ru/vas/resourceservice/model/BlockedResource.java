@@ -1,23 +1,25 @@
 package ru.vas.resourceservice.model;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Getter;
 import lombok.ToString;
+import org.junit.platform.commons.util.StringUtils;
 
 import java.time.LocalDate;
-import java.util.Arrays;
-import java.util.List;
-import java.util.UUID;
+import java.time.format.DateTimeParseException;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Getter
 @ToString
 public class BlockedResource {
-    private String id;
+    private final String id;
     private List<String> ip;
     private String domain;
     private String reason;
-    private String number;
+    @JsonFormat(pattern = "yyyy-MM-dd", shape = JsonFormat.Shape.STRING)
     private LocalDate dateOfBlock;
+    private Set<String> additionalParams = new HashSet<>();
 
     public BlockedResource(String line) {
         this.id = UUID.randomUUID().toString();
@@ -28,10 +30,10 @@ public class BlockedResource {
         final String[] params = line.split(Delimiters.SEMICOLON.getValue());
         setIp(params[0]);
         setDomain(params[1]);
+        addAdditionalParam(params[2]);
         setReason(params[3]);
         setNumber(params[4]);
         setDateOfBlock(params[5]);
-        System.out.println();
     }
 
     private void setIp(String param) {
@@ -45,16 +47,27 @@ public class BlockedResource {
         this.domain = param.trim();
     }
 
+    private void addAdditionalParam(String param) {
+        final String trimmedParam = param.trim();
+        if (StringUtils.isNotBlank(trimmedParam)) {
+            additionalParams.add(trimmedParam);
+        }
+    }
+
     private void setReason(String param) {
         this.reason = param.trim();
     }
 
     private void setNumber(String param) {
-        this.number = param.trim();
+        additionalParams.add(param.trim());
     }
 
     private void setDateOfBlock(String param) {
-        this.dateOfBlock = LocalDate.parse(param);
+        try {
+            this.dateOfBlock = LocalDate.parse(param);
+        } catch (DateTimeParseException ex) {
+            addAdditionalParam(param);
+        }
     }
 
     @Getter

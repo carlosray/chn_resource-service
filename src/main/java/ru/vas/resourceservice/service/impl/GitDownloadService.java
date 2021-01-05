@@ -18,6 +18,8 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 @Service
 @ConfigurationProperties(prefix = "resource-service.download.git")
@@ -27,6 +29,8 @@ public class GitDownloadService implements DownloadService {
     private URL url;
     @Value("${resource-service.download.git.file-location}")
     private String path;
+    @Value("${resource-service.download.git.file-name}")
+    private String fileName;
 
     private static int BUFFER_SIZE = 1024;
 
@@ -37,7 +41,7 @@ public class GitDownloadService implements DownloadService {
         log.info("Скачивание файла ... " + (completeFileSize / FileUtils.ONE_KB) + " Килобайт");
         try (ProgressBar progressBar = new ProgressBar("Прогресс", completeFileSize);
              BufferedInputStream inputStream = new BufferedInputStream(connection.getInputStream());
-             FileOutputStream fos = new FileOutputStream(path);
+             FileOutputStream fos = new FileOutputStream(getFilePath());
              BufferedOutputStream outputStream = new BufferedOutputStream(fos, BUFFER_SIZE)) {
 
             byte[] data = new byte[BUFFER_SIZE];
@@ -48,5 +52,12 @@ public class GitDownloadService implements DownloadService {
             }
         }
         return Paths.get(path).toFile();
+    }
+
+    private String getFilePath() {
+        return path
+                .concat(fileName)
+                .concat(LocalDateTime.now().format(DateTimeFormatter.ofPattern("HHmmss")))
+                .concat(".csv");
     }
 }

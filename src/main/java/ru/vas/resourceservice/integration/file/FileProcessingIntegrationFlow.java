@@ -1,6 +1,7 @@
 package ru.vas.resourceservice.integration.file;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.comparator.LastModifiedFileComparator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -62,11 +63,15 @@ public class FileProcessingIntegrationFlow {
     }
 
     @Bean
-    public IntegrationFlow fileReadingFlow(@Value("${resource-service.registry.file-location}") String blockedDir, ProcessFileLines processFileLines) {
+    public IntegrationFlow fileReadingFlow(@Value("${resource-service.registry.file-location}") String blockedDir,
+                                           ProcessFileLines processFileLines,
+                                           @Value("${resource-service.registry.polling-delay}") Duration delay) {
         return IntegrationFlows
-                .from(Files.inboundAdapter(new File(blockedDir))
-                                .patternFilter("*.csv"),
-                        e -> e.poller(Pollers.fixedDelay(Duration.ofSeconds(1))))
+                .from(Files.inboundAdapter(new File(blockedDir), LastModifiedFileComparator.LASTMODIFIED_COMPARATOR)
+                                .patternFilter("*.csv")
+                                .scanEachPoll(true)
+                                .preventDuplicates(true),
+                        e -> e.poller(Pollers.fixedDelay(delay)))
                 .log(LoggingHandler.Level.INFO, logStartProcessing())
                 .handle(processFileLines, "process")
                 .get();
@@ -91,13 +96,13 @@ public class FileProcessingIntegrationFlow {
         return IntegrationFlows
                 .from(inputSplitFileChannel())
                 .enrichHeaders(h -> h
-                        .header(startTimeHeader, LocalDateTime.now())
+                        .headerFunction(startTimeHeader, m -> LocalDateTime.now())
                         .headerFunction(SEQUENCE_SIZE, countOfLines())
                         .headerFunction(CORRELATION_ID, m -> m.getHeaders().getId()))
-                .split(Files.splitter(true).charset(Charset.defaultCharset()))
+                .split(Files.splitter(true).charset(Charset.forName("windows-1251")))
                 .channel(MessageChannels.executor(this.executor()))
-                .<String>filter(p -> p.split(BlockedResource.Delimiters.VERT_LINE.getValue()).length < 5)
-                .transform(BlockedResource::new)
+                .<String>filter(p -> p.split(BlockedResource.Delimiters.SEMICOLON.getValue()).length == 6)
+                .<String, BlockedResource>transform(BlockedResource::new)
                 .handle(Kafka.outboundChannelAdapter(producerFactory)
                         .topic(topic)
                         .sendSuccessChannel(KafkaMessageHeaders.REPLY_CHANNEL)
@@ -141,17 +146,17 @@ public class FileProcessingIntegrationFlow {
                     String fileMessageGuid = message.getHeaders()
                             .getOrDefault(CORRELATION_ID, message.getHeaders().getId())
                             .toString();
-                    final String tmpFileName = getTmpFileName(file.getName(), fileMessageGuid);
                     File destinationDir = Paths.get(file.getParent() + processedDir).toFile();
                     destinationDir.mkdirs();
-                    File destination = new File(destinationDir, tmpFileName);
+                    File destination = new File(destinationDir, getTmpFileName(file.getName(), fileMessageGuid));
                     boolean isSuccess = file.renameTo(destination);
                     final Duration duration = processingTime(message);
-                    log.info(String.format("Файл %s в '%s'. FileMessage GUID: %s%s",
+                    log.info(String.format("Файл %s в '%s'. FileMessage GUID: %s%s. Обработано строк: %s",
                             isSuccess ? "перемещен" : "не(!) перемещен",
                             processedDir,
                             fileMessageGuid,
-                            Objects.nonNull(duration) ? ". Время обработки: " + duration.toMillis() + " мс" : ""));
+                            Objects.nonNull(duration) ? ". Время обработки: " + duration.toMillis() + " мс" : "",
+                            message.getHeaders().getOrDefault(SEQUENCE_SIZE, "неизвестно")));
                 })
                 .get();
     }
@@ -160,9 +165,7 @@ public class FileProcessingIntegrationFlow {
         return sourceFileName
                 .concat("_")
                 .concat(id)
-                .concat("(")
-                .concat(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")))
-                .concat(").tmp");
+                .concat(".tmp");
     }
 
     private Duration processingTime(Message<?> message) {
