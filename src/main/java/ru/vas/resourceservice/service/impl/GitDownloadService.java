@@ -1,8 +1,5 @@
 package ru.vas.resourceservice.service.impl;
 
-import ch.qos.logback.core.util.FileSize;
-import lombok.Data;
-import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import me.tongfei.progressbar.ProgressBar;
@@ -15,9 +12,7 @@ import ru.vas.resourceservice.service.DownloadService;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 

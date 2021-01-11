@@ -2,7 +2,6 @@ package ru.vas.resourceservice.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import ru.vas.resourceservice.db.RssUpdateRepository;
 import ru.vas.resourceservice.db.domain.RssUpdate;
 import ru.vas.resourceservice.service.UpdateService;
 import ru.vas.resourceservice.service.rss.LocalRssService;

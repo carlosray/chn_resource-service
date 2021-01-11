@@ -2,7 +2,6 @@ package ru.vas.resourceservice.schedule.download;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -13,7 +12,7 @@ import ru.vas.resourceservice.service.UpdateService;
 
 import java.io.File;
 import java.io.IOException;
-import java.time.*;
+import java.time.Duration;
 
 @ConditionalOnProperty(value = "resource-service.download.enable", matchIfMissing = true, havingValue = "true")
 @Component("downloadScheduler")

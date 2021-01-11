@@ -29,7 +29,6 @@ import java.nio.charset.Charset;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Executor;
@@ -91,6 +90,7 @@ public class FileProcessingIntegrationFlow {
         void process(File file);
     }
 
+    @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
     @Bean
     public IntegrationFlow fileProcessingFlow(ProducerFactory<String, BlockedResource> producerFactory, @Value("${spring.kafka.template.default-topic}") String topic) {
         return IntegrationFlows
