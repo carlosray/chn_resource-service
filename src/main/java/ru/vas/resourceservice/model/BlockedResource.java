@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
 @Getter
 @ToString
 public class BlockedResource {
-    private final String id;
+    private final String rowLine;
     private List<String> ip;
     private String domain;
     private String reason;
@@ -22,7 +22,7 @@ public class BlockedResource {
     private Set<String> additionalParams = new HashSet<>();
 
     public BlockedResource(String line) {
-        this.id = UUID.randomUUID().toString();
+        this.rowLine = line;
         setUp(line);
     }
 

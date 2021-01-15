@@ -107,7 +107,7 @@ public class FileProcessingIntegrationFlow {
                         .topic(topic)
                         .sendSuccessChannel(KafkaMessageHeaders.REPLY_CHANNEL)
                         .sendFailureChannel(KafkaMessageHeaders.ERROR_CHANNEL)
-                        .<BlockedResource>messageKey(m -> m.getPayload().getId()))
+                        .<BlockedResource>messageKey(m -> m.getHeaders().getId().toString()))
                 .channel(KafkaMessageHeaders.REPLY_CHANNEL)
                 .aggregate(aggregatorSpecConfig())
                 .channel(renamingChannel())
