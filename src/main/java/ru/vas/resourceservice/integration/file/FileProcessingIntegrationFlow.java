@@ -1,8 +1,6 @@
 package ru.vas.resourceservice.integration.file;
 
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.comparator.LastModifiedFileComparator;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,7 +20,6 @@ import org.springframework.kafka.support.converter.KafkaMessageHeaders;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.stereotype.Component;
-import ru.vas.resourceservice.model.BlockedResource;
 import ru.vas.resourceservice.model.FileProcessingInfo;
 import ru.vas.resourceservice.service.FileService;
 
@@ -92,7 +89,7 @@ public class FileProcessingIntegrationFlow {
 
     @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
     @Bean
-    public IntegrationFlow fileProcessingFlow(ProducerFactory<String, BlockedResource> producerFactory,
+    public IntegrationFlow fileProcessingFlow(ProducerFactory<String, String> producerFactory,
                                               @Value("${spring.kafka.template.default-topic}") String topic,
                                               @Value("${resource-service.flow.file-processing.headers.start-processing-time}") String startTimeHeader) {
         return IntegrationFlows
@@ -103,7 +100,7 @@ public class FileProcessingIntegrationFlow {
                         .headerFunction(CORRELATION_ID, m -> m.getHeaders().getId()))
                 .split(Files.splitter(true).charset(Charset.forName("windows-1251")))
                 .channel(MessageChannels.executor(this.executor()))
-                .<String>filter(p -> p.split(BlockedResource.Delimiters.SEMICOLON.getValue()).length == 6)
+                .<String>filter(p -> p.split(";").length == 6)
                 .handle(Kafka.outboundChannelAdapter(producerFactory)
                         .topic(topic)
                         .sendSuccessChannel(KafkaMessageHeaders.REPLY_CHANNEL)
