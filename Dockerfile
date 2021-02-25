@@ -10,4 +10,4 @@ RUN mvn -f /home/app/pom.xml clean install
 #
 FROM openjdk:11-jre-slim
 COPY --from=build /home/app/target/resource-service-1.0.jar /usr/local/lib/resource-service-1.0.jar
-ENTRYPOINT ["java","-jar","/usr/local/lib/config-server-1.0.jar"]
+ENTRYPOINT ["java","-jar","/usr/local/lib/resource-service-1.0.jar"]
